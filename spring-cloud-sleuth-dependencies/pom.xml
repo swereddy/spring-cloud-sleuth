@@ -105,6 +105,16 @@
 				<artifactId>zipkin-reporter</artifactId>
 				<version>${zipkin-reporter2.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>io.zipkin.reporter2</groupId>
+				<artifactId>zipkin-sender-kafka11</artifactId>
+				<version>${zipkin-reporter2.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.zipkin.reporter2</groupId>
+				<artifactId>zipkin-sender-amqp-client</artifactId>
+				<version>${zipkin-reporter2.version}</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 	<profiles>

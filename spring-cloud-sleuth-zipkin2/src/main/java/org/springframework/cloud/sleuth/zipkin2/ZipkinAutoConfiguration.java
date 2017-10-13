@@ -21,16 +21,22 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
+import org.springframework.boot.autoconfigure.amqp.RabbitProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.ServiceInstance;
@@ -56,6 +62,8 @@ import zipkin2.Span;
 import zipkin2.reporter.AsyncReporter;
 import zipkin2.reporter.Reporter;
 import zipkin2.reporter.Sender;
+import zipkin2.reporter.amqp.RabbitMQSender;
+import zipkin2.reporter.kafka11.KafkaSender;
 
 /**
  * {@link org.springframework.boot.autoconfigure.EnableAutoConfiguration Auto-configuration}
@@ -164,7 +172,7 @@ public class ZipkinAutoConfiguration {
 	@Bean
 	public SpanReporter zipkinSpanListener(Reporter<Span> reporter, EndpointLocator endpointLocator,
 			Environment environment) {
-		return new ZipkinSpanListener(reporter, endpointLocator, environment, this.spanAdjusters);
+		return new ZipkinSpanReporter(reporter, endpointLocator, environment, this.spanAdjusters);
 	}
 
 	@Configuration
@@ -217,6 +225,46 @@ public class ZipkinAutoConfiguration {
 		public EndpointLocator zipkinEndpointLocator() {
 			return new DefaultEndpointLocator(this.registration, this.serverProperties, this.appName,
 							this.zipkinProperties, this.inetUtils);
+		}
+	}
+
+	@Configuration
+	@ConditionalOnClass({CachingConnectionFactory.class, RabbitMQSender.class})
+	@ConditionalOnMissingBean(Sender.class)
+	@ConditionalOnSingleCandidate(CachingConnectionFactory.class)
+	@ConditionalOnProperty(value = "spring.zipkin.rabbitmq.enabled", havingValue = "true", matchIfMissing = true)
+	static class ZipkinRabbitMQSenderConfiguration {
+		@Value("${spring.zipkin.rabbitmq.queue:zipkin}")
+		private String queue;
+
+		@Bean Sender rabbitSender(CachingConnectionFactory connectionFactory, RabbitProperties config) {
+			System.err.println("ERRRRR" +this.queue);
+			return RabbitMQSender.newBuilder()
+					.connectionFactory(connectionFactory.getRabbitConnectionFactory())
+					.queue(this.queue)
+					.addresses(config.determineAddresses())
+					.build();
+		}
+	}
+
+	@Configuration
+	@ConditionalOnClass({KafkaProperties.class, KafkaSender.class})
+	@ConditionalOnMissingBean(Sender.class)
+	@ConditionalOnSingleCandidate(KafkaProperties.class)
+	@ConditionalOnProperty(value = "spring.zipkin.kafka.enabled", havingValue = "true", matchIfMissing = true)
+	static class ZipkinKafkaSenderConfiguration {
+		@Value("${spring.zipkin.kafka.topic:zipkin}")
+		private String topic;
+
+		@Bean Sender kafkaSender(KafkaProperties config) {
+			System.err.println("ERRRRRtopic" +this.topic);
+			Map<String, Object> properties = config.buildProducerProperties();
+			properties.put("key.serializer", ByteArraySerializer.class.getName());
+			properties.put("value.serializer", ByteArraySerializer.class.getName());
+			return KafkaSender.newBuilder()
+					.topic(this.topic)
+					.overrides(properties)
+					.build();
 		}
 	}
 }

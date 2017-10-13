@@ -26,8 +26,10 @@ import org.springframework.test.context.junit4.SpringRunner;
 import zipkin.junit.ZipkinRule;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = ZipkinDiscoveryClientTests.Config.class,
-		properties = "spring.zipkin.baseUrl=http://zipkin/")
+@SpringBootTest(classes = ZipkinDiscoveryClientTests.Config.class, properties = {
+		"spring.zipkin.baseUrl=http://zipkin/",
+		"spring.zipkin.rabbitmq.enabled=false" // the jar in our classpath accidentally auto-configures rabbit
+})
 public class ZipkinDiscoveryClientTests {
 
 	@ClassRule public static ZipkinRule ZIPKIN_RULE = new ZipkinRule();
